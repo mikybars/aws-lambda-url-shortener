@@ -1,23 +1,28 @@
-import boto3
+import api
+import boto3, json
+from api import s3_client as s3
 from botocore.stub import Stubber
-import json
-from api import handle, s3_client
 from contextlib import contextmanager
 
 
 @contextmanager
 def link_exists_in_s3():
-    with Stubber(s3_client) as stubber:
+    with Stubber(s3) as stubber:
         stubber.add_response('head_object', {})
         yield stubber
 
 
 @contextmanager
 def link_does_not_exist_in_s3():
-    with Stubber(s3_client) as stubber:
+    with Stubber(s3) as stubber:
         stubber.add_client_error('head_object', service_error_code='404')
         stubber.add_response('put_object', {})
         yield stubber
+
+
+def handle(event):
+    response = api.handle(event, context={})
+    return response['statusCode'], json.loads(response['body'])
 
 
 class TestApi:
@@ -27,40 +32,43 @@ class TestApi:
                 'body': '{"url":"https://www.google.com/"}'
             }
 
-            r = handle(event, context={})
+            status, body = handle(event)
 
-            assert r['statusCode'] == 200
-            TestApi.assert_body_contains(r, 'message', 'success')
+            assert status == 200
+            assert body['message'] == 'success'
 
     def test_partial_url(self):
         event = {
             'body': '{"url":"www.google.com"}'
         }
 
-        r = handle(event, context={})
+        status, body = handle(event)
 
-        assert r['statusCode'] == 400
-        TestApi.assert_body_contains(r, 'message', 'invalid')
+        assert status == 400
+        assert 'invalid' in body['message']
+        assert 'path' not in body['message']
 
     def test_missing_url(self):
         event = {
             'body': '{}'
         }
 
-        r = handle(event, context={})
+        status, body = handle(event)
 
-        assert r['statusCode'] == 400
-        TestApi.assert_body_contains(r, 'message', 'required')
+        assert status == 400
+        assert 'required' in body['message']
+        assert 'path' not in body['message']
 
     def test_blank_url(self):
         event = {
             'body': '{"url":"  "}'
         }
 
-        r = handle(event, context={})
+        status, body = handle(event)
 
-        assert r['statusCode'] == 400
-        TestApi.assert_body_contains(r, 'message', 'required')
+        assert status == 400
+        assert 'required' in body['message']
+        assert 'path' not in body['message']
 
     def test_valid_custom_path(self):
         with link_does_not_exist_in_s3():
@@ -68,10 +76,9 @@ class TestApi:
                 'body': '{"url":"https://www.google.com/", "custom_path": "custom"}'
             }
 
-            r = handle(event, context={})
+            status, body = handle(event)
 
-            body = TestApi.get_body(r)
-            assert r['statusCode'] == 200
+            assert status == 200
             assert body['path'] == 'custom'
 
     def test_blank_custom_path(self):
@@ -80,10 +87,9 @@ class TestApi:
                 'body': '{"url":"https://www.google.com/", "custom_path": "  "}'
             }
 
-            r = handle(event, context={})
+            status, body = handle(event)
 
-            body = TestApi.get_body(r)
-            assert r['statusCode'] == 200
+            assert status == 200
             assert len(body['path'].strip()) > 0
 
     def test_custom_path_already_in_use(self):
@@ -92,21 +98,8 @@ class TestApi:
                 'body': '{"url":"https://www.google.com/", "custom_path": "custom"}'
             }
 
-            r = handle(event, context={})
+            status, body = handle(event)
 
-            body = TestApi.get_body(r)
-            assert r['statusCode'] == 400
+            assert status == 400
             assert 'already in use' in body['message']
             assert 'path' not in body
-
-    @staticmethod
-    def get_body(response):
-        assert 'body' in response
-        return json.loads(response['body'])
-
-    @staticmethod
-    def assert_body_contains(response, key, match):
-        assert 'body' in response
-        body = json.loads(response['body'])
-        assert key in body
-        assert match in body[key]
