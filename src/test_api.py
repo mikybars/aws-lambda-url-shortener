@@ -26,7 +26,9 @@ class TestApi:
             event = {
                 'body': '{"url":"https://www.google.com/"}'
             }
+
             r = handle(event, context={})
+
             assert r['statusCode'] == 200
             TestApi.assert_body_contains(r, 'message', 'success')
 
@@ -34,7 +36,9 @@ class TestApi:
         event = {
             'body': '{"url":"www.google.com"}'
         }
+
         r = handle(event, context={})
+
         assert r['statusCode'] == 400
         TestApi.assert_body_contains(r, 'message', 'invalid')
 
@@ -42,7 +46,9 @@ class TestApi:
         event = {
             'body': '{}'
         }
+
         r = handle(event, context={})
+
         assert r['statusCode'] == 400
         TestApi.assert_body_contains(r, 'message', 'required')
 
@@ -50,7 +56,9 @@ class TestApi:
         event = {
             'body': '{"url":"  "}'
         }
+
         r = handle(event, context={})
+
         assert r['statusCode'] == 400
         TestApi.assert_body_contains(r, 'message', 'required')
 
@@ -59,7 +67,9 @@ class TestApi:
             event = {
                 'body': '{"url":"https://www.google.com/", "custom_path": "custom"}'
             }
+
             r = handle(event, context={})
+
             body = TestApi.get_body(r)
             assert r['statusCode'] == 200
             assert body['path'] == 'custom'
@@ -69,7 +79,9 @@ class TestApi:
             event = {
                 'body': '{"url":"https://www.google.com/", "custom_path": "  "}'
             }
+
             r = handle(event, context={})
+
             body = TestApi.get_body(r)
             assert r['statusCode'] == 200
             assert len(body['path'].strip()) > 0
@@ -79,7 +91,9 @@ class TestApi:
             event = {
                 'body': '{"url":"https://www.google.com/", "custom_path": "custom"}'
             }
+
             r = handle(event, context={})
+
             body = TestApi.get_body(r)
             assert r['statusCode'] == 400
             assert 'already in use' in body['message']
