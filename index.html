@@ -101,9 +101,9 @@
 				$('#message').text(text).attr('class', 'alert alert-danger').show().delay(5000).fadeOut()
 			}
 
-			function displayShortenedUrl(url) {
+			function displayShortenedUrl(longUrl, shortUrl) {
 				$('#message').html(`
-				   <a id="short-url" href="${url}">${url}</a>
+				   <a id="short-url" title="${longUrl}" href="${shortUrl}">${shortUrl}</a>
 				   <a href="" onclick="copyLinkToClipboard(); return false;" title="Copy to clipboard">
 				   <i class="far fa-clipboard"></i>
 					</a>
@@ -122,6 +122,11 @@
 				$('input#custom-path').val('')
 			}
 
+			function resetUi() {
+				$('#url').val('')
+				resetCustomize()
+			}
+
 			function copyLinkToClipboard() {
 				navigator.clipboard.writeText($('a#short-url').text())
 			}
@@ -134,8 +139,8 @@
 					var protocol = window.location.protocol + '//'
 					var host = window.location.host + '/'
 					var shortUrl = protocol + host + responseJSON.path
-					displayShortenedUrl(shortUrl)
-					resetCustomize()
+					displayShortenedUrl(longUrl, shortUrl)
+					resetUi()
 				}).fail(function (data) {
 					if (data.status === 400) {
 						errorMessage(data.responseJSON.message)
