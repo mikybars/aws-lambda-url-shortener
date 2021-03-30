@@ -2,13 +2,27 @@ import boto3
 from botocore.stub import Stubber
 import json
 from api import handle, s3_client
+from contextlib import contextmanager
+
+
+@contextmanager
+def link_exists_in_s3():
+    with Stubber(s3_client) as stubber:
+        stubber.add_response('head_object', {})
+        yield stubber
+
+
+@contextmanager
+def link_does_not_exist_in_s3():
+    with Stubber(s3_client) as stubber:
+        stubber.add_client_error('head_object', service_error_code='404')
+        stubber.add_response('put_object', {})
+        yield stubber
 
 
 class TestApi:
     def test_valid_url(self):
-        with Stubber(s3_client) as stubber:
-            stubber.add_client_error('head_object', service_error_code='404')
-            stubber.add_response('put_object', {})
+        with link_does_not_exist_in_s3():
             event = {
                 'body': '{"url":"https://www.google.com/"}'
             }
@@ -41,9 +55,7 @@ class TestApi:
         TestApi.assert_body_contains(r, 'message', 'required')
 
     def test_valid_custom_path(self):
-        with Stubber(s3_client) as stubber:
-            stubber.add_client_error('head_object', service_error_code='404')
-            stubber.add_response('put_object', {})
+        with link_does_not_exist_in_s3():
             event = {
                 'body': '{"url":"https://www.google.com/", "custom_path": "custom"}'
             }
@@ -53,9 +65,7 @@ class TestApi:
             assert body['path'] == 'custom'
 
     def test_blank_custom_path(self):
-        with Stubber(s3_client) as stubber:
-            stubber.add_client_error('head_object', service_error_code='404')
-            stubber.add_response('put_object', {})
+        with link_does_not_exist_in_s3():
             event = {
                 'body': '{"url":"https://www.google.com/", "custom_path": "  "}'
             }
@@ -65,8 +75,7 @@ class TestApi:
             assert len(body['path'].strip()) > 0
 
     def test_custom_path_already_in_use(self):
-        with Stubber(s3_client) as stubber:
-            stubber.add_response('head_object', {})
+        with link_exists_in_s3():
             event = {
                 'body': '{"url":"https://www.google.com/", "custom_path": "custom"}'
             }
@@ -74,6 +83,7 @@ class TestApi:
             body = TestApi.get_body(r)
             assert r['statusCode'] == 400
             assert 'already in use' in body['message']
+            assert 'path' not in body
 
     @staticmethod
     def get_body(response):
